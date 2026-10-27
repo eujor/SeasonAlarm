@@ -20,6 +20,7 @@ public class RingActivity extends Activity {
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        Ui.configure(this);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
         if (Build.VERSION.SDK_INT >= 27) {
             setShowWhenLocked(true);
@@ -51,8 +52,8 @@ public class RingActivity extends Activity {
         city.setGravity(Gravity.CENTER);
         root.addView(city);
 
-        ZonedDateTime homeNow = ZonedDateTime.now(ZoneId.of(TimeZones.HOME_ZONE));
-        TextView home = Ui.text(this, "Nairobi now  •  " + homeNow.format(DateTimeFormatter.ofPattern("HH:mm:ss EAT")), 13, 0xff8ebdb6, false);
+        ZonedDateTime homeNow = ZonedDateTime.now(TimeZones.resolveZone(TimeZones.HOME_ZONE));
+        TextView home = Ui.text(this, "Device time  •  " + homeNow.format(DateTimeFormatter.ofPattern("HH:mm:ss z")), 13, 0xff8ebdb6, false);
         home.setGravity(Gravity.CENTER);
         home.setPadding(0, Ui.dp(this, 8), 0, Ui.dp(this, 32));
         root.addView(home);
@@ -86,7 +87,7 @@ public class RingActivity extends Activity {
     }
 
     private void action(String action) {
-        startService(new Intent(this, AlarmRingingService.class)
+        startForegroundService(new Intent(this, AlarmRingingService.class)
                 .setAction(action)
                 .putExtra(AlarmScheduler.EXTRA_ID, id));
     }

@@ -42,12 +42,13 @@ public class EditAlarmActivity extends Activity {
     private Button timeBtn, toneBtn, onceDateBtn;
     private Switch vibrate;
     private final CheckBox[] dayChecks = new CheckBox[7];
-    private EditText datesText, snoozeText;
+    private EditText datesText, snoozeText, autoStopText;
     private TextView preview;
     private LinearLayout daysBox, datesBox, onceBox;
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        Ui.configure(this);
         long id = getIntent().getLongExtra("id", -1);
         alarm = id == -1 ? new Alarm() : new AlarmRepository(this).find(id);
         if (alarm == null) alarm = new Alarm();
@@ -80,7 +81,7 @@ public class EditAlarmActivity extends Activity {
         hp.setMargins(0, 0, 0, Ui.dp(this, 14));
         hero.setLayoutParams(hp);
         hero.addView(Ui.text(this, getIntent().hasExtra("id") ? "Edit alarm" : "Create alarm", 25, Color.WHITE, true));
-        TextView hs = Ui.text(this, "Set the time where the people are. SeasonAlarm handles Nairobi conversion.", 12, 0xffb9d5d1, false);
+        TextView hs = Ui.text(this, "Set the time where the people are. SeasonAlarm handles conversion to this device.", 12, 0xffb9d5d1, false);
         hs.setPadding(0, Ui.dp(this, 4), 0, 0);
         hero.addView(hs);
         root.addView(hero);
@@ -96,7 +97,7 @@ public class EditAlarmActivity extends Activity {
         alarmCard.addView(label);
 
         alarmCard.addView(fieldLabel("Target city / timezone"));
-        cities = TimeZones.cities();
+        cities = TimeZones.searchableCities();
         citySpinner = new Spinner(this);
         citySpinner.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, cities));
         int cityIndex = 0;
@@ -158,9 +159,16 @@ public class EditAlarmActivity extends Activity {
         datesBox.setPadding(0, Ui.dp(this, 8), 0, 0);
         datesBox.addView(fieldLabel("Dates in target city's calendar"));
         datesText = new EditText(this);
-        datesText.setHint("2026-11-03, 2026-11-10");
         datesText.setText(String.join(",", alarm.dates));
+        datesText.setVisibility(View.GONE);
         datesBox.addView(datesText);
+        Button addCalendarDate = Ui.secondaryButton(this, "+ Add date from calendar");
+        addCalendarDate.setOnClickListener(v -> chooseAdditionalDate());
+        datesBox.addView(addCalendarDate);
+        TextView selectedDates = Ui.text(this, alarm.dates.isEmpty() ? "No dates selected yet" : String.join("  •  ", alarm.dates), 12, Ui.MUTED, false);
+        selectedDates.setTag("selectedDates");
+        selectedDates.setPadding(0, Ui.dp(this, 8), 0, 0);
+        datesBox.addView(selectedDates);
         repeatCard.addView(datesBox);
 
         onceBox = new LinearLayout(this);
@@ -201,6 +209,11 @@ public class EditAlarmActivity extends Activity {
         snoozeText.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         snoozeText.setText(String.valueOf(alarm.snoozeMinutes));
         soundCard.addView(snoozeText);
+        soundCard.addView(fieldLabel("Auto-stop ringing after minutes"));
+        autoStopText = new EditText(this);
+        autoStopText.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        autoStopText.setText(String.valueOf(alarm.autoStopMinutes));
+        soundCard.addView(autoStopText);
         root.addView(soundCard);
 
         Button save = Ui.primaryButton(this, "Save alarm");
@@ -229,6 +242,8 @@ public class EditAlarmActivity extends Activity {
         } catch (Exception e) {
             alarm.snoozeMinutes = 5;
         }
+        try { alarm.autoStopMinutes = Math.max(1, Math.min(60, Integer.parseInt(autoStopText.getText().toString().trim()))); }
+        catch (Exception e) { alarm.autoStopMinutes = 15; }
         alarm.repeatMode = modeKey(repeatSpinner.getSelectedItemPosition());
         alarm.weekdays.clear();
         for (int i = 0; i < 7; i++) if (dayChecks[i].isChecked()) alarm.weekdays.add(i + 1);
@@ -272,11 +287,11 @@ public class EditAlarmActivity extends Activity {
         ZoneId z = TimeZones.resolveZone(c.zoneId);
         ZonedDateTime nowThere = ZonedDateTime.now(z);
         ZonedDateTime sample = LocalDateTime.of(nowThere.toLocalDate(), LocalTime.of(alarm.hour, alarm.minute)).atZone(z);
-        ZonedDateTime eat = sample.withZoneSameInstant(ZoneId.of(TimeZones.HOME_ZONE));
+        ZonedDateTime eat = sample.withZoneSameInstant(TimeZones.resolveZone(TimeZones.HOME_ZONE));
         String line = "NOW THERE  " + nowThere.format(DateTimeFormatter.ofPattern("HH:mm:ss z")) +
                 "\n" + TimeZones.seasonText(z, Instant.now()) +
                 "\n\nYOUR ALARM  " + String.format("%02d:%02d", alarm.hour, alarm.minute) + " in " + c.name +
-                "\nNAIROBI  " + eat.format(DateTimeFormatter.ofPattern("HH:mm")) + " EAT on that target-city date";
+                "\nDEVICE LOCAL  " + eat.format(DateTimeFormatter.ofPattern("HH:mm z")) + " on that target-city date";
         preview.setText(line);
     }
 
@@ -328,6 +343,21 @@ public class EditAlarmActivity extends Activity {
         daysBox.setVisibility(i == 2 ? View.VISIBLE : View.GONE);
         datesBox.setVisibility(i == 3 ? View.VISIBLE : View.GONE);
         onceBox.setVisibility(i == 4 ? View.VISIBLE : View.GONE);
+    }
+
+    private void chooseAdditionalDate() {
+        LocalDate d = LocalDate.now();
+        new DatePickerDialog(this, (v, y, m, day) -> {
+            String value = String.format("%04d-%02d-%02d", y, m + 1, day);
+            java.util.LinkedHashSet<String> values = new java.util.LinkedHashSet<>();
+            for (String x : datesText.getText().toString().split(",")) if (!x.trim().isEmpty()) values.add(x.trim());
+            values.add(value);
+            datesText.setText(String.join(",", values));
+            for (int i=0;i<datesBox.getChildCount();i++) {
+                View child = datesBox.getChildAt(i);
+                if (child instanceof TextView && "selectedDates".equals(child.getTag())) ((TextView) child).setText(String.join("  •  ", values));
+            }
+        }, d.getYear(), d.getMonthValue()-1, d.getDayOfMonth()).show();
     }
 
     private void chooseDate() {

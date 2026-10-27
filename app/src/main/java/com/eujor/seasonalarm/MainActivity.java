@@ -1,7 +1,5 @@
 package com.eujor.seasonalarm;
 
-import android.view.View;
-
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -16,8 +14,10 @@ import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.Button;
 import android.widget.HorizontalScrollView;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Switch;
@@ -43,6 +43,7 @@ public class MainActivity extends Activity {
     private int activeTab = TAB_CLOCKS;
     private String activeRegion = "All";
     private int clockTicks = 0;
+    private String clockQuery = "";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable clockTick = new Runnable() {
@@ -56,6 +57,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        Ui.configure(this);
         buildUi();
         requestNotificationPermissionIfNeeded();
     }
@@ -105,10 +107,19 @@ public class MainActivity extends Activity {
 
         headerClock = Ui.text(this, "", 17, Color.WHITE, true);
         hero.addView(headerClock);
-        TextView home = Ui.text(this, "HOME • Nairobi, Africa • EAT", 11, 0xff9fc7c1, true);
+        TextView home = Ui.text(this, "DETECTED DEVICE REGION • " + TimeZones.deviceRegionLabel(), 11, 0xff9fc7c1, true);
         home.setLetterSpacing(0.08f);
         home.setPadding(0, Ui.dp(this, 4), 0, 0);
         hero.addView(home);
+        Switch dark = new Switch(this);
+        dark.setText("Dark mode");
+        dark.setTextColor(Color.WHITE);
+        dark.setChecked(Ui.isDark(this));
+        dark.setOnCheckedChangeListener((b1, checked) -> {
+            getSharedPreferences("ui", MODE_PRIVATE).edit().putBoolean("dark", checked).apply();
+            recreate();
+        });
+        hero.addView(dark);
         root.addView(hero);
 
         LinearLayout tabs = new LinearLayout(this);
@@ -149,11 +160,22 @@ public class MainActivity extends Activity {
         TextView title = Ui.text(this, "Regional clocks", 20, Ui.INK, true);
         intro.addView(title);
         TextView copy = Ui.text(this,
-                "Choose an alarm in the city's local time. SeasonAlarm converts it to Nairobi automatically when DST or standard time changes.",
+                "Choose an alarm in the city's local time. SeasonAlarm converts it to your detected device timezone automatically when DST or standard time changes.",
                 13, Ui.MUTED, false);
         copy.setPadding(0, Ui.dp(this, 5), 0, 0);
         intro.addView(copy);
         contentBox.addView(intro);
+
+        EditText search = new EditText(this);
+        search.setHint("Search any timezone city (works offline)");
+        search.setSingleLine(true);
+        search.setText(clockQuery);
+        search.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
+            public void onTextChanged(CharSequence q, int st, int before, int count) { clockQuery = q.toString(); renderClocks(); }
+            public void afterTextChanged(android.text.Editable e) {}
+        });
+        contentBox.addView(search);
 
         contentBox.addView(Ui.sectionTitle(this, "REGION"));
         HorizontalScrollView hsv = new HorizontalScrollView(this);
@@ -185,8 +207,9 @@ public class MainActivity extends Activity {
     private void renderClocks() {
         if (clocksBox == null) return;
         clocksBox.removeAllViews();
-        List<City> cities = TimeZones.cities();
+        List<City> cities = clockQuery.trim().isEmpty() ? TimeZones.cities() : TimeZones.searchableCities();
         for (City city : cities) {
+            if (!clockQuery.trim().isEmpty() && !city.name.toLowerCase().contains(clockQuery.trim().toLowerCase()) && !city.zoneId.toLowerCase().contains(clockQuery.trim().toLowerCase())) continue;
             boolean homeMatch = "Home".equals(activeRegion) && (TimeZones.LOCAL_ZONE.equals(city.zoneId) || TimeZones.HOME_ZONE.equals(city.zoneId));
             if (!"All".equals(activeRegion) && !homeMatch && !activeRegion.equals(city.region)) continue;
             clocksBox.addView(clockCard(city));
@@ -259,6 +282,14 @@ public class MainActivity extends Activity {
         alarmsBox.setOrientation(LinearLayout.VERTICAL);
         contentBox.addView(alarmsBox);
         renderAlarms();
+
+        LinearLayout about = Ui.card(this);
+        about.addView(Ui.text(this, "App info", 18, Ui.INK, true));
+        about.addView(Ui.text(this, "SeasonAlarm v2.1\nDeveloper: 𖤢ꚶꚠ𖣠𖦪\n© " + java.time.Year.now().getValue() + " 𖤢ꚶꚠ𖣠𖦪", 13, Ui.MUTED, false));
+        Button repo = Ui.secondaryButton(this, "GitHub • eujor/SeasonAlarm");
+        repo.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/eujor/SeasonAlarm"))));
+        about.addView(repo);
+        contentBox.addView(about);
     }
 
     private View readinessCard() {
@@ -421,7 +452,7 @@ public class MainActivity extends Activity {
 
     private void updateHeaderClock() {
         if (headerClock == null) return;
-        ZonedDateTime now = ZonedDateTime.now(ZoneId.of(TimeZones.HOME_ZONE));
+        ZonedDateTime now = ZonedDateTime.now(TimeZones.resolveZone(TimeZones.HOME_ZONE));
         headerClock.setText(now.format(DateTimeFormatter.ofPattern("HH:mm:ss  •  EEE, dd MMM")));
     }
 

@@ -141,9 +141,9 @@ public class AlarmScheduler {
     public static String nextSummary(Alarm a) {
         ZonedDateTime target = nextOccurrence(a, Instant.now());
         if (target == null) return "No future occurrence";
-        ZonedDateTime home = target.withZoneSameInstant(ZoneId.of(TimeZones.HOME_ZONE));
+        ZonedDateTime home = target.withZoneSameInstant(TimeZones.resolveZone(TimeZones.HOME_ZONE));
         DateTimeFormatter f = DateTimeFormatter.ofPattern("EEE dd MMM, HH:mm");
-        return target.format(f) + " " + shortZone(target) + "  →  " + home.format(f) + " EAT";
+        return target.format(f) + " " + shortZone(target) + "  →  " + home.format(f) + " local";
     }
 
     private static String shortZone(ZonedDateTime z) {

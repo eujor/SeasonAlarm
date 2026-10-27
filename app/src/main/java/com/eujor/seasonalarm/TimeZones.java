@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.TimeZone;
 
 public final class TimeZones {
-    public static final String HOME_ZONE = "Africa/Nairobi";
+    public static final String HOME_ZONE = "LOCAL";
     public static final String LOCAL_ZONE = "LOCAL";
 
     private TimeZones() {}
@@ -102,6 +102,29 @@ public final class TimeZones {
         return dst ? "Daylight Saving • summer clock" : "Standard Time • winter clock";
     }
 
+    public static String deviceRegionLabel() {
+        String id = TimeZone.getDefault().getID();
+        String[] p = id.split("/");
+        if (p.length >= 2) return p[p.length-1].replace('_',' ') + ", " + p[0];
+        return id;
+    }
+
+    public static List<City> searchableCities() {
+        ArrayList<City> out = new ArrayList<>(cities());
+        java.util.HashSet<String> seen = new java.util.HashSet<>();
+        for (City c : out) seen.add(c.zoneId);
+        ArrayList<String> ids = new ArrayList<>(ZoneId.getAvailableZoneIds());
+        java.util.Collections.sort(ids);
+        for (String id : ids) {
+            if (seen.contains(id) || !id.contains("/") || id.startsWith("Etc/")) continue;
+            String[] p = id.split("/");
+            String city = p[p.length-1].replace('_',' ');
+            String region = p[0].equals("America") ? "Americas" : p[0];
+            out.add(new City(city + " • " + id, id, region));
+        }
+        return out;
+    }
+
     public static String currentClockLine(String name, String zoneId) {
         ZoneId zone = resolveZone(zoneId);
         ZonedDateTime now = ZonedDateTime.now(zone);
@@ -112,13 +135,13 @@ public final class TimeZones {
     public static String offsetFromHome(String zoneId) {
         Instant now = Instant.now();
         ZoneId zone = resolveZone(zoneId);
-        ZoneId home = ZoneId.of(HOME_ZONE);
+        ZoneId home = resolveZone(HOME_ZONE);
         int diff = zone.getRules().getOffset(now).getTotalSeconds() - home.getRules().getOffset(now).getTotalSeconds();
-        if (diff == 0) return "Same time as Nairobi";
+        if (diff == 0) return "Same time as device";
         int abs = Math.abs(diff);
         int hours = abs / 3600;
         int minutes = (abs % 3600) / 60;
         String amount = hours + "h" + (minutes == 0 ? "" : " " + minutes + "m");
-        return (diff > 0 ? "+" : "−") + amount + " vs EAT";
+        return (diff > 0 ? "+" : "−") + amount + " vs device";
     }
 }

@@ -75,12 +75,14 @@ public class AlarmRingingService extends Service {
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .setOngoing(true)
                 .setAutoCancel(false)
+                .setContentIntent(fullPi)
                 .setFullScreenIntent(fullPi, true)
                 .addAction(new Notification.Action.Builder(android.R.drawable.ic_lock_idle_alarm, "Snooze", snoozePi).build())
-                .addAction(new Notification.Action.Builder(android.R.drawable.ic_menu_close_clear_cancel, "Dismiss", stopPi).build())
+                .addAction(new Notification.Action.Builder(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPi).build())
                 .build();
         startForeground(42, n);
         play(alarm);
+        new android.os.Handler(getMainLooper()).postDelayed(() -> { stopAlarm(); stopSelf(); }, Math.max(1, alarm.autoStopMinutes) * 60_000L);
         return START_NOT_STICKY;
     }
 

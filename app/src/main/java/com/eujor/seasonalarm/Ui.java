@@ -11,18 +11,32 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 public final class Ui {
-    public static final int BG = Color.rgb(244, 248, 248);
-    public static final int CARD = Color.WHITE;
-    public static final int INK = Color.rgb(18, 38, 43);
-    public static final int MUTED = Color.rgb(91, 111, 116);
+    public static int BG = Color.rgb(244, 248, 248);
+    public static int CARD = Color.WHITE;
+    public static int INK = Color.rgb(18, 38, 43);
+    public static int MUTED = Color.rgb(91, 111, 116);
     public static final int BRAND = Color.rgb(0, 105, 92);
     public static final int BRAND_DARK = Color.rgb(9, 31, 38);
-    public static final int BRAND_SOFT = Color.rgb(224, 242, 239);
-    public static final int LINE = Color.rgb(218, 228, 229);
+    public static int BRAND_SOFT = Color.rgb(224, 242, 239);
+    public static int LINE = Color.rgb(218, 228, 229);
     public static final int DANGER = Color.rgb(176, 49, 49);
     public static final int SUCCESS = Color.rgb(28, 123, 79);
 
     private Ui() {}
+
+    public static void configure(Context c) {
+        boolean dark = c.getSharedPreferences("ui", Context.MODE_PRIVATE).getBoolean("dark", false);
+        BG = dark ? Color.rgb(12, 22, 26) : Color.rgb(244, 248, 248);
+        CARD = dark ? Color.rgb(22, 35, 40) : Color.WHITE;
+        INK = dark ? Color.rgb(238, 247, 246) : Color.rgb(18, 38, 43);
+        MUTED = dark ? Color.rgb(166, 188, 190) : Color.rgb(91, 111, 116);
+        BRAND_SOFT = dark ? Color.rgb(25, 62, 60) : Color.rgb(224, 242, 239);
+        LINE = dark ? Color.rgb(50, 70, 74) : Color.rgb(218, 228, 229);
+    }
+
+    public static boolean isDark(Context c) {
+        return c.getSharedPreferences("ui", Context.MODE_PRIVATE).getBoolean("dark", false);
+    }
 
     public static int dp(Context c, int value) {
         return Math.round(value * c.getResources().getDisplayMetrics().density);
@@ -78,7 +92,7 @@ public final class Ui {
         b.setTextSize(13);
         b.setAllCaps(false);
         b.setMinHeight(dp(c, 46));
-        b.setBackground(rounded(Color.WHITE, 14, LINE, 1, c));
+        b.setBackground(rounded(CARD, 14, LINE, 1, c));
         return b;
     }
 
@@ -110,7 +124,7 @@ public final class Ui {
         b.setMinHeight(dp(c, 40));
         b.setPadding(dp(c, 14), 0, dp(c, 14), 0);
         b.setTextColor(selected ? Color.WHITE : INK);
-        b.setBackground(rounded(selected ? BRAND : Color.WHITE, 20,
+        b.setBackground(rounded(selected ? BRAND : CARD, 20,
                 selected ? BRAND : LINE, 1, c));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, dp(c, 40));
         lp.setMargins(0, 0, dp(c, 8), 0);
