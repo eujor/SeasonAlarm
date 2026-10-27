@@ -298,57 +298,40 @@ public class MainActivity extends Activity {
     }
 
     private void buildAlarmsTab() {
-        contentBox.addView(readinessCard());
+        ScrollView pageScroll = new ScrollView(this);
+        pageScroll.setFillViewport(true);
+        pageScroll.setVerticalScrollBarEnabled(true);
+
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+
+        page.addView(readinessCard());
 
         Button add = Ui.primaryButton(this, "+  Create alarm");
         add.setOnClickListener(v -> startActivity(new Intent(this, EditAlarmActivity.class)));
-        contentBox.addView(add);
+        page.addView(add);
 
-        contentBox.addView(Ui.sectionTitle(this, "SCHEDULED ALARMS"));
+        page.addView(Ui.sectionTitle(this, "SCHEDULED ALARMS"));
 
-        LinearLayout alarmFrame = new LinearLayout(this);
-        alarmFrame.setOrientation(LinearLayout.VERTICAL);
-        alarmFrame.setPadding(Ui.dp(this, 10), Ui.dp(this, 8), Ui.dp(this, 10), Ui.dp(this, 8));
-        alarmFrame.setBackground(Ui.rounded(Ui.CARD, 18, Ui.BRAND, 2, this));
-
-        LinearLayout alarmScrollHint = new LinearLayout(this);
-        alarmScrollHint.setOrientation(LinearLayout.HORIZONTAL);
-        alarmScrollHint.setGravity(Gravity.CENTER_VERTICAL);
-        TextView alarmListLabel = Ui.text(this, "YOUR SCHEDULE", 11, Ui.MUTED, true);
-        alarmListLabel.setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1f));
-        alarmScrollHint.addView(alarmListLabel);
-        TextView alarmScrollCue = Ui.text(this, "↕  Scroll for more", 11, Ui.BRAND, true);
-        alarmScrollHint.addView(alarmScrollCue);
-        alarmScrollHint.setPadding(Ui.dp(this, 4), Ui.dp(this, 2), Ui.dp(this, 4), Ui.dp(this, 7));
-        alarmFrame.addView(alarmScrollHint);
-        LinearLayout.LayoutParams afp = new LinearLayout.LayoutParams(-1, 0, 1f);
-        afp.setMargins(0, 0, 0, Ui.dp(this, 10));
-        alarmFrame.setLayoutParams(afp);
-
-        ScrollView alarmsScroll = new ScrollView(this);
-        alarmsScroll.setFillViewport(true);
-        alarmsScroll.setVerticalScrollBarEnabled(true);
-        alarmsScroll.setScrollbarFadingEnabled(false);
-        alarmsScroll.setVerticalFadingEdgeEnabled(true);
-        alarmsScroll.setFadingEdgeLength(Ui.dp(this, 24));
         alarmsBox = new LinearLayout(this);
         alarmsBox.setOrientation(LinearLayout.VERTICAL);
         alarmsBox.setPadding(0, 0, 0, Ui.dp(this, 2));
-        alarmsScroll.addView(alarmsBox, new ScrollView.LayoutParams(-1, -2));
-        alarmFrame.addView(alarmsScroll, new LinearLayout.LayoutParams(-1, 0, 1f));
-        contentBox.addView(alarmFrame);
+        page.addView(alarmsBox, new LinearLayout.LayoutParams(-1, -2));
         renderAlarms();
 
         LinearLayout about = Ui.card(this);
         about.addView(Ui.text(this, "App info", 18, Ui.INK, true));
-        about.addView(Ui.text(this, "SeasonAlarm v3.1.0\nDeveloper: 𖤢ꚶꚠ𖣠𖦪\n© " + java.time.Year.now().getValue() + " 𖤢ꚶꚠ𖣠𖦪", 13, Ui.MUTED, false));
+        about.addView(Ui.text(this, "SeasonAlarm v3.1.1\nDeveloper: 𖤢ꚶꚠ𖣠𖦪\n© " + java.time.Year.now().getValue() + " 𖤢ꚶꚠ𖣠𖦪", 13, Ui.MUTED, false));
         Button repo = Ui.secondaryButton(this, "Check other versions");
         repo.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/eujor/SeasonAlarm/releases"))));
         about.addView(repo);
         LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, -2);
-        ap.setMargins(0, 0, 0, 0);
+        ap.setMargins(0, Ui.dp(this, 4), 0, 0);
         about.setLayoutParams(ap);
-        contentBox.addView(about);
+        page.addView(about);
+
+        pageScroll.addView(page, new ScrollView.LayoutParams(-1, -2));
+        contentBox.addView(pageScroll, new LinearLayout.LayoutParams(-1, 0, 1f));
     }
 
     private View readinessCard() {
