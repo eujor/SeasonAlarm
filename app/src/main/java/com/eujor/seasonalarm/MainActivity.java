@@ -1,5 +1,7 @@
 package com.eujor.seasonalarm;
 
+import android.view.View;
+
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
