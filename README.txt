@@ -34,4 +34,4 @@ SeasonAlarm releases
 App Info -> Check other versions opens:
 https://github.com/eujor/SeasonAlarm/releases
 
-Pushing a version tag such as v2.2.0 triggers Publish SeasonAlarm Release and attaches the APK to GitHub Releases.
+Pushing a version tag such as v3.1.0 triggers Publish SeasonAlarm Release and attaches the APK to GitHub Releases.

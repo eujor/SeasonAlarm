@@ -83,27 +83,23 @@ public class MainActivity extends Activity {
     }
 
     private void buildUi() {
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(Ui.dp(this, 16), Ui.dp(this, 14), Ui.dp(this, 16), Ui.dp(this, 30));
+        root.setPadding(Ui.dp(this, 16), Ui.dp(this, 14), Ui.dp(this, 16), Ui.dp(this, 14));
         root.setBackgroundColor(Ui.BG);
-        scroll.addView(root);
 
         LinearLayout hero = new LinearLayout(this);
         hero.setOrientation(LinearLayout.VERTICAL);
         hero.setPadding(Ui.dp(this, 20), Ui.dp(this, 18), Ui.dp(this, 20), Ui.dp(this, 18));
         hero.setBackground(Ui.rounded(Ui.BRAND_DARK, 24, Ui.BRAND_DARK, 0, this));
         LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, -2);
-        hp.setMargins(0, 0, 0, Ui.dp(this, 14));
+        hp.setMargins(0, 0, 0, Ui.dp(this, 12));
         hero.setLayoutParams(hp);
 
         TextView brand = Ui.text(this, "SeasonAlarm", 28, Color.WHITE, true);
         hero.addView(brand);
         TextView sub = Ui.text(this, "World-time alarms that follow each city's clock", 13, 0xffb9d5d1, false);
-        sub.setPadding(0, Ui.dp(this, 3), 0, Ui.dp(this, 14));
+        sub.setPadding(0, Ui.dp(this, 3), 0, Ui.dp(this, 12));
         hero.addView(sub);
 
         headerClock = Ui.text(this, "", 17, Color.WHITE, true);
@@ -128,7 +124,7 @@ public class MainActivity extends Activity {
         tabs.setPadding(Ui.dp(this, 3), Ui.dp(this, 3), Ui.dp(this, 3), Ui.dp(this, 3));
         tabs.setBackground(Ui.rounded(Ui.CARD, 17, Ui.LINE, 1, this));
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-1, -2);
-        tp.setMargins(0, 0, 0, Ui.dp(this, 14));
+        tp.setMargins(0, 0, 0, Ui.dp(this, 12));
         tabs.setLayoutParams(tp);
 
         clocksTab = Ui.tabButton(this, "World Clocks", true);
@@ -141,9 +137,10 @@ public class MainActivity extends Activity {
 
         contentBox = new LinearLayout(this);
         contentBox.setOrientation(LinearLayout.VERTICAL);
+        contentBox.setLayoutParams(new LinearLayout.LayoutParams(-1, 0, 1f));
         root.addView(contentBox);
 
-        setContentView(scroll);
+        setContentView(root);
         updateHeaderClock();
         showTab(TAB_CLOCKS);
     }
@@ -177,7 +174,7 @@ public class MainActivity extends Activity {
             public void onTextChanged(CharSequence q, int st, int before, int count) { clockQuery = q.toString(); renderClocks(); }
             public void afterTextChanged(android.text.Editable e) {}
         });
-        contentBox.addView(search);
+        contentBox.addView(search, new LinearLayout.LayoutParams(-1, Ui.dp(this, 50)));
 
         contentBox.addView(Ui.sectionTitle(this, "REGION"));
         HorizontalScrollView hsv = new HorizontalScrollView(this);
@@ -196,9 +193,23 @@ public class MainActivity extends Activity {
         hsv.addView(chips);
         contentBox.addView(hsv);
 
+        LinearLayout frame = new LinearLayout(this);
+        frame.setOrientation(LinearLayout.VERTICAL);
+        frame.setPadding(Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8));
+        frame.setBackground(Ui.rounded(Ui.CARD, 18, Ui.LINE, 1, this));
+        LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(-1, 0, 1f);
+        fp.setMargins(0, 0, 0, Ui.dp(this, 2));
+        frame.setLayoutParams(fp);
+
+        ScrollView resultsScroll = new ScrollView(this);
+        resultsScroll.setFillViewport(true);
+        resultsScroll.setVerticalScrollBarEnabled(true);
         clocksBox = new LinearLayout(this);
         clocksBox.setOrientation(LinearLayout.VERTICAL);
-        contentBox.addView(clocksBox);
+        clocksBox.setPadding(0, 0, 0, Ui.dp(this, 2));
+        resultsScroll.addView(clocksBox, new ScrollView.LayoutParams(-1, -2));
+        frame.addView(resultsScroll, new LinearLayout.LayoutParams(-1, 0, 1f));
+        contentBox.addView(frame);
         renderClocks();
     }
 
@@ -280,17 +291,35 @@ public class MainActivity extends Activity {
         contentBox.addView(add);
 
         contentBox.addView(Ui.sectionTitle(this, "SCHEDULED ALARMS"));
+
+        LinearLayout alarmFrame = new LinearLayout(this);
+        alarmFrame.setOrientation(LinearLayout.VERTICAL);
+        alarmFrame.setPadding(Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8));
+        alarmFrame.setBackground(Ui.rounded(Ui.CARD, 18, Ui.LINE, 1, this));
+        LinearLayout.LayoutParams afp = new LinearLayout.LayoutParams(-1, 0, 1f);
+        afp.setMargins(0, 0, 0, Ui.dp(this, 10));
+        alarmFrame.setLayoutParams(afp);
+
+        ScrollView alarmsScroll = new ScrollView(this);
+        alarmsScroll.setFillViewport(true);
+        alarmsScroll.setVerticalScrollBarEnabled(true);
         alarmsBox = new LinearLayout(this);
         alarmsBox.setOrientation(LinearLayout.VERTICAL);
-        contentBox.addView(alarmsBox);
+        alarmsBox.setPadding(0, 0, 0, Ui.dp(this, 2));
+        alarmsScroll.addView(alarmsBox, new ScrollView.LayoutParams(-1, -2));
+        alarmFrame.addView(alarmsScroll, new LinearLayout.LayoutParams(-1, 0, 1f));
+        contentBox.addView(alarmFrame);
         renderAlarms();
 
         LinearLayout about = Ui.card(this);
         about.addView(Ui.text(this, "App info", 18, Ui.INK, true));
-        about.addView(Ui.text(this, "SeasonAlarm v2.2.0\nDeveloper: 𖤢ꚶꚠ𖣠𖦪\n© " + java.time.Year.now().getValue() + " 𖤢ꚶꚠ𖣠𖦪", 13, Ui.MUTED, false));
+        about.addView(Ui.text(this, "SeasonAlarm v3.1.0\nDeveloper: 𖤢ꚶꚠ𖣠𖦪\n© " + java.time.Year.now().getValue() + " 𖤢ꚶꚠ𖣠𖦪", 13, Ui.MUTED, false));
         Button repo = Ui.secondaryButton(this, "Check other versions");
         repo.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/eujor/SeasonAlarm/releases"))));
         about.addView(repo);
+        LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, -2);
+        ap.setMargins(0, 0, 0, 0);
+        about.setLayoutParams(ap);
         contentBox.addView(about);
     }
 
