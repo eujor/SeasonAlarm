@@ -3,6 +3,7 @@ package com.eujor.seasonalarm;
 import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Typeface;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.WindowManager;
 import android.widget.Button;
@@ -14,6 +15,10 @@ public class RingActivity extends Activity {
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
+        if (Build.VERSION.SDK_INT >= 27) {
+            setShowWhenLocked(true);
+            setTurnScreenOn(true);
+        }
         id = getIntent().getLongExtra(AlarmScheduler.EXTRA_ID,-1);
         Alarm a = new AlarmRepository(this).find(id);
         if (a == null) { finish(); return; }

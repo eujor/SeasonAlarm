@@ -27,3 +27,19 @@ Cloud APK build
 Exact alarms
 ------------
 On Android 12+ the app may ask you to allow exact alarms. Allow it or alarms cannot be guaranteed at the requested exact minute.
+
+VERSION 1.1 RELIABILITY CHECKLIST
+---------------------------------
+On first launch, Season Alarm shows a REQUIRED ACCESS section.
+Grant every item shown there:
+- Notifications (Android 13+)
+- Exact alarms / Alarms & reminders (Android 12+)
+- Full-screen alarms (Android 14+ when required by the device)
+
+Vibration permission is a normal manifest permission and does not show a runtime popup.
+Tone selection uses Android's system alarm-tone picker and needs no storage permission.
+Each alarm can use the default tone, a selected system alarm tone, or Silent / No Tone.
+Each alarm independently supports vibration on/off and a configurable snooze duration.
+The ringing screen and the alarm notification both provide Snooze and Dismiss controls.
+
+The app uses AudioAttributes.USAGE_ALARM, so the phone's Alarm volume controls loudness.

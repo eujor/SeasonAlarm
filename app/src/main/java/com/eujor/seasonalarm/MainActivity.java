@@ -2,26 +2,29 @@ package com.eujor.seasonalarm;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.NotificationManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.view.View;
+import android.provider.Settings;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Switch;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import java.util.List;
 
 public class MainActivity extends Activity {
+    private static final int REQ_NOTIFICATIONS = 90;
     private LinearLayout alarmsBox;
     private LinearLayout clocksBox;
+    private LinearLayout permissionsBox;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable clockTick = new Runnable() {
         @Override public void run() { renderClocks(); handler.postDelayed(this, 1000); }
@@ -29,14 +32,15 @@ public class MainActivity extends Activity {
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
-        requestNotificationPermission();
         buildUi();
+        requestNotificationPermissionIfNeeded();
     }
 
     @Override protected void onResume() {
         super.onResume();
         AlarmScheduler scheduler = new AlarmScheduler(this);
         if (scheduler.canScheduleExact()) scheduler.rescheduleAll();
+        renderPermissions();
         renderAlarms();
         handler.removeCallbacks(clockTick);
         handler.post(clockTick);
@@ -45,6 +49,11 @@ public class MainActivity extends Activity {
     @Override protected void onPause() {
         handler.removeCallbacks(clockTick);
         super.onPause();
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_NOTIFICATIONS) renderPermissions();
     }
 
     private void buildUi() {
@@ -58,16 +67,10 @@ public class MainActivity extends Activity {
         root.addView(title);
         root.addView(text("Home timezone: Nairobi, Africa (EAT)", 14, false));
 
-        AlarmScheduler scheduler = new AlarmScheduler(this);
-        if (!scheduler.canScheduleExact()) {
-            Button exact = new Button(this);
-            exact.setText("ALLOW EXACT ALARMS");
-            exact.setOnClickListener(v -> {
-                Intent i = scheduler.exactAlarmSettingsIntent();
-                if (i != null) startActivity(i);
-            });
-            root.addView(exact);
-        }
+        root.addView(section("REQUIRED ACCESS"));
+        permissionsBox = new LinearLayout(this);
+        permissionsBox.setOrientation(LinearLayout.VERTICAL);
+        root.addView(permissionsBox);
 
         Button add = new Button(this);
         add.setText("+ NEW ALARM");
@@ -85,6 +88,61 @@ public class MainActivity extends Activity {
         root.addView(alarmsBox);
 
         setContentView(scroll);
+        renderPermissions();
+    }
+
+    private void renderPermissions() {
+        if (permissionsBox == null) return;
+        permissionsBox.removeAllViews();
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            boolean notifications = checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+            if (notifications) {
+                permissionsBox.addView(text("✓ Notifications allowed", 14, false));
+            } else {
+                Button b = new Button(this);
+                b.setText("ALLOW NOTIFICATIONS");
+                b.setOnClickListener(v -> requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFICATIONS));
+                permissionsBox.addView(b);
+            }
+        } else {
+            permissionsBox.addView(text("✓ Notifications available", 14, false));
+        }
+
+        AlarmScheduler scheduler = new AlarmScheduler(this);
+        if (scheduler.canScheduleExact()) {
+            permissionsBox.addView(text("✓ Exact alarms allowed", 14, false));
+        } else {
+            Button b = new Button(this);
+            b.setText("ALLOW EXACT ALARMS");
+            b.setOnClickListener(v -> {
+                Intent i = scheduler.exactAlarmSettingsIntent();
+                if (i != null) startActivity(i);
+            });
+            permissionsBox.addView(b);
+        }
+
+        if (Build.VERSION.SDK_INT >= 34) {
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            boolean fullScreen = nm != null && nm.canUseFullScreenIntent();
+            if (fullScreen) {
+                permissionsBox.addView(text("✓ Full-screen alarm access allowed", 14, false));
+            } else {
+                Button b = new Button(this);
+                b.setText("ALLOW FULL-SCREEN ALARMS");
+                b.setOnClickListener(v -> {
+                    Intent i = new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                            Uri.parse("package:" + getPackageName()));
+                    startActivity(i);
+                });
+                permissionsBox.addView(b);
+            }
+        } else {
+            permissionsBox.addView(text("✓ Full-screen alarm access available", 14, false));
+        }
+
+        permissionsBox.addView(text("✓ Vibration permission included (no runtime prompt required)", 14, false));
+        permissionsBox.addView(text("✓ Alarm tones use the Android system alarm-tone picker", 14, false));
     }
 
     private void renderClocks() {
@@ -176,9 +234,10 @@ public class MainActivity extends Activity {
         return v;
     }
 
-    private void requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 90);
+    private void requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFICATIONS);
         }
     }
 }

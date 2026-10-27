@@ -20,6 +20,7 @@ import android.provider.Settings;
 public class AlarmRingingService extends Service {
     public static final String ACTION_STOP = "com.eujor.seasonalarm.STOP";
     public static final String ACTION_SNOOZE = "com.eujor.seasonalarm.SNOOZE";
+    public static final String SILENT_TONE = "SILENT";
     private static final String CHANNEL = "alarm_ringing";
     private MediaPlayer player;
     private Vibrator vibrator;
@@ -31,6 +32,9 @@ public class AlarmRingingService extends Service {
         NotificationChannel ch = new NotificationChannel(CHANNEL, "Ringing alarms", NotificationManager.IMPORTANCE_HIGH);
         ch.setDescription("Active Season Alarm notifications");
         ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        // Sound/vibration are controlled by each alarm, not by the notification channel.
+        ch.setSound(null, null);
+        ch.enableVibration(false);
         nm.createNotificationChannel(ch);
     }
 
@@ -39,7 +43,8 @@ public class AlarmRingingService extends Service {
             stopAlarm(); stopSelf(); return START_NOT_STICKY;
         }
         if (intent != null && ACTION_SNOOZE.equals(intent.getAction())) {
-            Alarm a = new AlarmRepository(this).find(alarmId);
+            long requestedId = intent.getLongExtra(AlarmScheduler.EXTRA_ID, alarmId);
+            Alarm a = new AlarmRepository(this).find(requestedId);
             if (a != null) new AlarmScheduler(this).snooze(a, a.snoozeMinutes);
             stopAlarm(); stopSelf(); return START_NOT_STICKY;
         }
@@ -49,13 +54,17 @@ public class AlarmRingingService extends Service {
         if (alarm == null) { stopSelf(); return START_NOT_STICKY; }
 
         Intent full = new Intent(this, RingActivity.class).putExtra(AlarmScheduler.EXTRA_ID, alarmId);
-        PendingIntent fullPi = PendingIntent.getActivity(this, 1001, full,
+        PendingIntent fullPi = PendingIntent.getActivity(this, req(alarmId, 1), full,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        Intent stopI = new Intent(this, AlarmRingingService.class).setAction(ACTION_STOP);
-        PendingIntent stopPi = PendingIntent.getService(this, 1002, stopI,
+        Intent stopI = new Intent(this, AlarmRingingService.class)
+                .setAction(ACTION_STOP)
+                .putExtra(AlarmScheduler.EXTRA_ID, alarmId);
+        PendingIntent stopPi = PendingIntent.getService(this, req(alarmId, 2), stopI,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        Intent snoozeI = new Intent(this, AlarmRingingService.class).setAction(ACTION_SNOOZE);
-        PendingIntent snoozePi = PendingIntent.getService(this, 1003, snoozeI,
+        Intent snoozeI = new Intent(this, AlarmRingingService.class)
+                .setAction(ACTION_SNOOZE)
+                .putExtra(AlarmScheduler.EXTRA_ID, alarmId);
+        PendingIntent snoozePi = PendingIntent.getService(this, req(alarmId, 3), snoozeI,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Notification n = new Notification.Builder(this, CHANNEL)
@@ -65,6 +74,7 @@ public class AlarmRingingService extends Service {
                 .setCategory(Notification.CATEGORY_ALARM)
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .setOngoing(true)
+                .setAutoCancel(false)
                 .setFullScreenIntent(fullPi, true)
                 .addAction(new Notification.Action.Builder(android.R.drawable.ic_lock_idle_alarm, "Snooze", snoozePi).build())
                 .addAction(new Notification.Action.Builder(android.R.drawable.ic_menu_close_clear_cancel, "Dismiss", stopPi).build())
@@ -76,16 +86,14 @@ public class AlarmRingingService extends Service {
 
     private void play(Alarm alarm) {
         stopAlarm();
-        try {
+
+        if (!SILENT_TONE.equals(alarm.toneUri)) {
             Uri uri = alarm.toneUri == null || alarm.toneUri.isEmpty()
                     ? Settings.System.DEFAULT_ALARM_ALERT_URI : Uri.parse(alarm.toneUri);
-            player = new MediaPlayer();
-            player.setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build());
-            player.setDataSource(this, uri);
-            player.setLooping(true);
-            player.prepare();
-            player.start();
-        } catch (Exception ignored) {}
+            if (!startPlayer(uri) && !Settings.System.DEFAULT_ALARM_ALERT_URI.equals(uri)) {
+                startPlayer(Settings.System.DEFAULT_ALARM_ALERT_URI);
+            }
+        }
 
         if (alarm.vibrate) {
             if (Build.VERSION.SDK_INT >= 31) {
@@ -98,6 +106,32 @@ public class AlarmRingingService extends Service {
                 vibrator.vibrate(VibrationEffect.createWaveform(new long[]{0,700,350,700,350}, 1));
             }
         }
+    }
+
+    private boolean startPlayer(Uri uri) {
+        try {
+            player = new MediaPlayer();
+            player.setAudioAttributes(new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build());
+            player.setDataSource(this, uri);
+            player.setLooping(true);
+            player.prepare();
+            player.start();
+            return true;
+        } catch (Exception e) {
+            if (player != null) {
+                try { player.release(); } catch (Exception ignored) {}
+                player = null;
+            }
+            return false;
+        }
+    }
+
+    private int req(long id, int salt) {
+        long x = id ^ (id >>> 32);
+        return ((int)(x & 0x7fffffff)) ^ (salt * 0x13579b);
     }
 
     private void stopAlarm() {

@@ -104,7 +104,9 @@ public class EditAlarmActivity extends Activity {
 
         vibrate = new Switch(this); vibrate.setText("Vibration"); vibrate.setChecked(alarm.vibrate); root.addView(vibrate);
 
-        toneBtn = new Button(this); toneBtn.setText("SELECT ALARM TONE");
+        toneBtn = new Button(this);
+        toneBtn.setText(AlarmRingingService.SILENT_TONE.equals(alarm.toneUri) ? "SILENT / NO TONE" :
+                (alarm.toneUri == null || alarm.toneUri.isEmpty() ? "DEFAULT ALARM TONE" : "TONE SELECTED"));
         toneBtn.setOnClickListener(v -> pickTone()); root.addView(toneBtn);
 
         root.addView(labelText("Snooze minutes"));
@@ -172,7 +174,9 @@ public class EditAlarmActivity extends Activity {
         Intent i = new Intent(RingtoneManager.ACTION_RINGTONE_PICKER);
         i.putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM);
         i.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true);
-        Uri existing = alarm.toneUri.isEmpty()? Settings.System.DEFAULT_ALARM_ALERT_URI:Uri.parse(alarm.toneUri);
+        i.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true);
+        Uri existing = (alarm.toneUri == null || alarm.toneUri.isEmpty() || AlarmRingingService.SILENT_TONE.equals(alarm.toneUri))
+                ? Settings.System.DEFAULT_ALARM_ALERT_URI : Uri.parse(alarm.toneUri);
         i.putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, existing);
         startActivityForResult(i, PICK_TONE);
     }
@@ -181,8 +185,8 @@ public class EditAlarmActivity extends Activity {
         super.onActivityResult(requestCode,resultCode,data);
         if (requestCode==PICK_TONE && resultCode==RESULT_OK && data!=null) {
             Uri uri = (Uri) data.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI);
-            alarm.toneUri = uri==null?"":uri.toString();
-            toneBtn.setText(uri==null?"SILENT / NO TONE":"TONE SELECTED");
+            alarm.toneUri = uri==null ? AlarmRingingService.SILENT_TONE : uri.toString();
+            toneBtn.setText(uri==null ? "SILENT / NO TONE" : "TONE SELECTED");
         }
     }
 
