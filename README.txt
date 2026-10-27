@@ -28,3 +28,10 @@ Alarm functionality retained:
 Cloud build:
 GitHub -> Actions -> Build SeasonAlarm APK -> Run workflow.
 Artifact: SeasonAlarm-v2-debug-apk
+
+SeasonAlarm releases
+--------------------
+App Info -> Check other versions opens:
+https://github.com/eujor/SeasonAlarm/releases
+
+Pushing a version tag such as v2.2.0 triggers Publish SeasonAlarm Release and attaches the APK to GitHub Releases.

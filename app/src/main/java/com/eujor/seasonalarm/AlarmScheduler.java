@@ -1,9 +1,14 @@
 package com.eujor.seasonalarm;
 
 import android.app.AlarmManager;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.Manifest;
 import android.os.Build;
 import android.provider.Settings;
 
@@ -22,6 +27,8 @@ import java.util.List;
 public class AlarmScheduler {
     public static final String EXTRA_ID = "alarm_id";
     public static final String EXTRA_SNOOZE = "is_snooze";
+    private static final String STATUS_CHANNEL = "scheduled_alarm_status";
+    private static final int STATUS_NOTIFICATION_ID = 43;
     private final Context context;
     private final AlarmManager am;
 
@@ -52,11 +59,12 @@ public class AlarmScheduler {
 
     public void scheduleNext(Alarm alarm) {
         cancel(alarm.id);
-        if (!alarm.enabled || !canScheduleExact()) return;
+        if (!alarm.enabled || !canScheduleExact()) { refreshUpcomingNotification(); return; }
         ZonedDateTime next = nextOccurrence(alarm, Instant.now());
         if (next == null) {
             alarm.enabled = false;
             new AlarmRepository(context).save(alarm);
+            refreshUpcomingNotification();
             return;
         }
         Intent fire = new Intent(context, AlarmReceiver.class)
@@ -69,6 +77,7 @@ public class AlarmScheduler {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         AlarmManager.AlarmClockInfo info = new AlarmManager.AlarmClockInfo(next.toInstant().toEpochMilli(), showPi);
         am.setAlarmClock(info, operation);
+        refreshUpcomingNotification();
     }
 
     public void snooze(Alarm alarm, int minutes) {
@@ -82,10 +91,61 @@ public class AlarmScheduler {
         PendingIntent showPi = PendingIntent.getActivity(context, requestCode(alarm.id, false), show,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         am.setAlarmClock(new AlarmManager.AlarmClockInfo(when, showPi), operation);
+        refreshUpcomingNotification();
     }
 
     public void rescheduleAll() {
         for (Alarm a : new AlarmRepository(context).all()) if (a.enabled) scheduleNext(a);
+        refreshUpcomingNotification();
+    }
+
+    public void refreshUpcomingNotification() {
+        NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+
+        NotificationChannel channel = new NotificationChannel(
+                STATUS_CHANNEL, "Scheduled alarm status", NotificationManager.IMPORTANCE_LOW);
+        channel.setDescription("Shows that SeasonAlarm has an upcoming alarm scheduled");
+        channel.setShowBadge(false);
+        nm.createNotificationChannel(channel);
+
+        Alarm best = null;
+        ZonedDateTime bestTime = null;
+        Instant now = Instant.now();
+        for (Alarm a : new AlarmRepository(context).all()) {
+            if (!a.enabled) continue;
+            ZonedDateTime next = nextOccurrence(a, now);
+            if (next != null && (bestTime == null || next.toInstant().isBefore(bestTime.toInstant()))) {
+                best = a;
+                bestTime = next;
+            }
+        }
+
+        if (best == null || bestTime == null) {
+            nm.cancel(STATUS_NOTIFICATION_ID);
+            return;
+        }
+
+        PendingIntent open = PendingIntent.getActivity(
+                context, STATUS_NOTIFICATION_ID,
+                new Intent(context, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        ZonedDateTime local = bestTime.withZoneSameInstant(TimeZones.resolveZone(TimeZones.HOME_ZONE));
+        String when = local.format(DateTimeFormatter.ofPattern("EEE dd MMM • HH:mm"));
+        Notification n = new Notification.Builder(context, STATUS_CHANNEL)
+                .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                .setContentTitle("Alarm set • " + when)
+                .setContentText(best.label + " • " + best.cityName)
+                .setCategory(Notification.CATEGORY_ALARM)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setContentIntent(open)
+                .build();
+        nm.notify(STATUS_NOTIFICATION_ID, n);
     }
 
     private int requestCode(long id, boolean alt) {

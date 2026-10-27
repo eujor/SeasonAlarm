@@ -19,6 +19,7 @@ public class AlarmReceiver extends BroadcastReceiver {
             if ("ONCE".equals(alarm.repeatMode)) {
                 alarm.enabled = false;
                 new AlarmRepository(context).save(alarm);
+                new AlarmScheduler(context).refreshUpcomingNotification();
             } else {
                 new AlarmScheduler(context).scheduleNext(alarm);
             }

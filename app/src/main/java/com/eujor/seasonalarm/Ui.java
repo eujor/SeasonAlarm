@@ -6,7 +6,9 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -61,6 +63,34 @@ public final class Ui {
         lp.setMargins(0, 0, 0, dp(c, 14));
         card.setLayoutParams(lp);
         return card;
+    }
+
+
+    public static void styleInput(Context c, EditText e) {
+        e.setTextColor(INK);
+        e.setHintTextColor(MUTED);
+        e.setBackgroundTintList(android.content.res.ColorStateList.valueOf(BRAND));
+        e.setPadding(dp(c, 10), dp(c, 8), dp(c, 10), dp(c, 8));
+    }
+
+    public static ArrayAdapter<String> spinnerAdapter(Context c, String[] values) {
+        return new ArrayAdapter<String>(c, android.R.layout.simple_spinner_item, values) {
+            @Override public View getView(int position, View convertView, android.view.ViewGroup parent) {
+                TextView v = (TextView) super.getView(position, convertView, parent);
+                v.setTextColor(INK);
+                v.setTextSize(14);
+                v.setPadding(dp(c, 10), dp(c, 10), dp(c, 10), dp(c, 10));
+                return v;
+            }
+            @Override public View getDropDownView(int position, View convertView, android.view.ViewGroup parent) {
+                TextView v = (TextView) super.getDropDownView(position, convertView, parent);
+                v.setTextColor(INK);
+                v.setBackgroundColor(CARD);
+                v.setTextSize(14);
+                v.setPadding(dp(c, 14), dp(c, 12), dp(c, 14), dp(c, 12));
+                return v;
+            }
+        };
     }
 
     public static TextView sectionTitle(Context c, String value) {

@@ -1,6 +1,9 @@
 package com.eujor.seasonalarm;
 
 import android.app.Activity;
+import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
+import android.view.animation.AccelerateDecelerateInterpolator;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Build;
@@ -38,6 +41,17 @@ public class RingActivity extends Activity {
 
         TextView state = Ui.badge(this, "ALARM RINGING", Color.WHITE, Ui.BRAND);
         root.addView(state);
+
+        TextView ringingIcon = Ui.text(this, "⏰", 82, Color.WHITE, false);
+        ringingIcon.setGravity(Gravity.CENTER);
+        ringingIcon.setPadding(0, Ui.dp(this, 20), 0, Ui.dp(this, 4));
+        root.addView(ringingIcon);
+        ObjectAnimator swing = ObjectAnimator.ofFloat(ringingIcon, "rotation", -14f, 14f);
+        swing.setDuration(330);
+        swing.setRepeatMode(ValueAnimator.REVERSE);
+        swing.setRepeatCount(ValueAnimator.INFINITE);
+        swing.setInterpolator(new AccelerateDecelerateInterpolator());
+        swing.start();
 
         TextView label = Ui.text(this, a.label, 27, Color.WHITE, true);
         label.setGravity(Gravity.CENTER);

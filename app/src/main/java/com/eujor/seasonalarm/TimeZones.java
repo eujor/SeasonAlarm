@@ -6,6 +6,8 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.zone.ZoneRules;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.TimeZone;
 
@@ -82,6 +84,14 @@ public final class TimeZones {
         c.add(new City("Melbourne, Australia", "Australia/Melbourne", "Oceania"));
         c.add(new City("Brisbane, Australia", "Australia/Brisbane", "Oceania"));
         c.add(new City("Auckland, New Zealand", "Pacific/Auckland", "Oceania"));
+        if (c.size() > 1) {
+            List<City> rest = new ArrayList<>(c.subList(1, c.size()));
+            rest.sort(Comparator.comparing(x -> x.name.toLowerCase(java.util.Locale.ROOT)));
+            ArrayList<City> sorted = new ArrayList<>();
+            sorted.add(c.get(0));
+            sorted.addAll(rest);
+            return sorted;
+        }
         return c;
     }
 
@@ -112,16 +122,26 @@ public final class TimeZones {
     public static List<City> searchableCities() {
         ArrayList<City> out = new ArrayList<>(cities());
         java.util.HashSet<String> seen = new java.util.HashSet<>();
-        for (City c : out) seen.add(c.zoneId);
+        for (City c : out) seen.add(c.zoneId + "|" + c.name);
+
         ArrayList<String> ids = new ArrayList<>(ZoneId.getAvailableZoneIds());
-        java.util.Collections.sort(ids);
+        Collections.sort(ids);
         for (String id : ids) {
-            if (seen.contains(id) || !id.contains("/") || id.startsWith("Etc/")) continue;
-            String[] p = id.split("/");
-            String city = p[p.length-1].replace('_',' ');
-            String region = p[0].equals("America") ? "Americas" : p[0];
-            out.add(new City(city + " • " + id, id, region));
+            if (!id.contains("/") || id.startsWith("Etc/")) continue;
+            String[] parts = id.split("/");
+            String city = parts[parts.length - 1].replace('_', ' ');
+            String region = parts[0].equals("America") ? "Americas" : parts[0];
+            String display = city + "  •  " + id;
+            String key = id + "|" + display;
+            if (seen.add(key)) out.add(new City(display, id, region));
         }
+
+        out.sort((a, b) -> {
+            if (LOCAL_ZONE.equals(a.zoneId)) return -1;
+            if (LOCAL_ZONE.equals(b.zoneId)) return 1;
+            int byName = a.name.compareToIgnoreCase(b.name);
+            return byName != 0 ? byName : a.zoneId.compareToIgnoreCase(b.zoneId);
+        });
         return out;
     }
 

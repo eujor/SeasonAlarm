@@ -66,6 +66,7 @@ public class MainActivity extends Activity {
         super.onResume();
         AlarmScheduler scheduler = new AlarmScheduler(this);
         if (scheduler.canScheduleExact()) scheduler.rescheduleAll();
+        scheduler.refreshUpcomingNotification();
         showTab(activeTab);
         handler.removeCallbacks(clockTick);
         handler.post(clockTick);
@@ -125,7 +126,7 @@ public class MainActivity extends Activity {
         LinearLayout tabs = new LinearLayout(this);
         tabs.setOrientation(LinearLayout.HORIZONTAL);
         tabs.setPadding(Ui.dp(this, 3), Ui.dp(this, 3), Ui.dp(this, 3), Ui.dp(this, 3));
-        tabs.setBackground(Ui.rounded(0xffe7eeee, 17, Ui.LINE, 1, this));
+        tabs.setBackground(Ui.rounded(Ui.CARD, 17, Ui.LINE, 1, this));
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-1, -2);
         tp.setMargins(0, 0, 0, Ui.dp(this, 14));
         tabs.setLayoutParams(tp);
@@ -167,8 +168,9 @@ public class MainActivity extends Activity {
         contentBox.addView(intro);
 
         EditText search = new EditText(this);
-        search.setHint("Search any timezone city (works offline)");
+        search.setHint("Search city or IANA timezone");
         search.setSingleLine(true);
+        Ui.styleInput(this, search);
         search.setText(clockQuery);
         search.addTextChangedListener(new android.text.TextWatcher() {
             public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
@@ -285,9 +287,9 @@ public class MainActivity extends Activity {
 
         LinearLayout about = Ui.card(this);
         about.addView(Ui.text(this, "App info", 18, Ui.INK, true));
-        about.addView(Ui.text(this, "SeasonAlarm v2.1\nDeveloper: 𖤢ꚶꚠ𖣠𖦪\n© " + java.time.Year.now().getValue() + " 𖤢ꚶꚠ𖣠𖦪", 13, Ui.MUTED, false));
-        Button repo = Ui.secondaryButton(this, "GitHub • eujor/SeasonAlarm");
-        repo.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/eujor/SeasonAlarm"))));
+        about.addView(Ui.text(this, "SeasonAlarm v2.2.0\nDeveloper: 𖤢ꚶꚠ𖣠𖦪\n© " + java.time.Year.now().getValue() + " 𖤢ꚶꚠ𖣠𖦪", 13, Ui.MUTED, false));
+        Button repo = Ui.secondaryButton(this, "Check other versions");
+        repo.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/eujor/SeasonAlarm/releases"))));
         about.addView(repo);
         contentBox.addView(about);
     }
@@ -388,7 +390,7 @@ public class MainActivity extends Activity {
             a.enabled = checked;
             new AlarmRepository(this).save(a);
             AlarmScheduler s = new AlarmScheduler(this);
-            if (checked) s.scheduleNext(a); else s.cancel(a.id);
+            if (checked) s.scheduleNext(a); else { s.cancel(a.id); s.refreshUpcomingNotification(); }
             renderAlarms();
         });
         top.addView(enabled);
@@ -432,6 +434,7 @@ public class MainActivity extends Activity {
                 .setPositiveButton("Delete", (d, which) -> {
                     new AlarmScheduler(this).cancel(a.id);
                     new AlarmRepository(this).delete(a.id);
+                    new AlarmScheduler(this).refreshUpcomingNotification();
                     renderAlarms();
                 }).show());
         actions.addView(del);

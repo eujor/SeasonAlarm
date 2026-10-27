@@ -2,6 +2,7 @@ package com.eujor.seasonalarm;
 
 import android.app.Activity;
 import android.app.DatePickerDialog;
+import android.app.AlertDialog;
 import android.app.TimePickerDialog;
 import android.content.Intent;
 import android.graphics.Color;
@@ -18,6 +19,7 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ListView;
 import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.Switch;
@@ -32,13 +34,17 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Locale;
 
 public class EditAlarmActivity extends Activity {
     private static final int PICK_TONE = 77;
     private Alarm alarm;
     private List<City> cities;
     private EditText label;
-    private Spinner citySpinner, repeatSpinner;
+    private Spinner repeatSpinner;
+    private Button cityBtn;
+    private City selectedCity;
     private Button timeBtn, toneBtn, onceDateBtn;
     private Switch vibrate;
     private final CheckBox[] dayChecks = new CheckBox[7];
@@ -93,23 +99,20 @@ public class EditAlarmActivity extends Activity {
         label.setSingleLine(true);
         label.setImeOptions(EditorInfo.IME_ACTION_DONE);
         label.setHint("e.g. London morning call");
+        Ui.styleInput(this, label);
         label.setText(alarm.label);
         alarmCard.addView(label);
 
         alarmCard.addView(fieldLabel("Target city / timezone"));
         cities = TimeZones.searchableCities();
-        citySpinner = new Spinner(this);
-        citySpinner.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, cities));
-        int cityIndex = 0;
-        for (int i = 0; i < cities.size(); i++) {
-            if (cities.get(i).zoneId.equals(alarm.zoneId) && cities.get(i).name.equals(alarm.cityName)) {
-                cityIndex = i;
-                break;
-            }
-        }
-        citySpinner.setSelection(cityIndex);
-        citySpinner.setOnItemSelectedListener(new SimpleItemSelected(this::updatePreview));
-        alarmCard.addView(citySpinner);
+        selectedCity = findInitialCity();
+        cityBtn = Ui.secondaryButton(this, cityButtonText());
+        cityBtn.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        cityBtn.setOnClickListener(v -> showCityPicker());
+        alarmCard.addView(cityBtn);
+        TextView cityHelp = Ui.text(this, "Alphabetical list • search city name or IANA zone, e.g. America/New_York", 11, Ui.MUTED, false);
+        cityHelp.setPadding(0, Ui.dp(this, 5), 0, 0);
+        alarmCard.addView(cityHelp);
 
         alarmCard.addView(fieldLabel("Time in selected city"));
         timeBtn = Ui.primaryButton(this, "");
@@ -136,7 +139,7 @@ public class EditAlarmActivity extends Activity {
         LinearLayout repeatCard = Ui.card(this);
         repeatSpinner = new Spinner(this);
         String[] modes = {"Weekdays (Mon–Fri)", "Every day", "Selected weekdays", "Specific calendar dates", "One time"};
-        repeatSpinner.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, modes));
+        repeatSpinner.setAdapter(Ui.spinnerAdapter(this, modes));
         repeatSpinner.setSelection(modeIndex(alarm.repeatMode));
         repeatSpinner.setOnItemSelectedListener(new SimpleItemSelected(this::refreshRepeatVisibility));
         repeatCard.addView(repeatSpinner);
@@ -148,6 +151,8 @@ public class EditAlarmActivity extends Activity {
         for (int i = 0; i < 7; i++) {
             CheckBox cb = new CheckBox(this);
             cb.setText(dayNames[i]);
+            cb.setTextColor(Ui.INK);
+            cb.setButtonTintList(android.content.res.ColorStateList.valueOf(Ui.BRAND));
             cb.setChecked(alarm.weekdays.contains(i + 1));
             dayChecks[i] = cb;
             daysBox.addView(cb);
@@ -207,11 +212,13 @@ public class EditAlarmActivity extends Activity {
         soundCard.addView(fieldLabel("Snooze minutes"));
         snoozeText = new EditText(this);
         snoozeText.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        Ui.styleInput(this, snoozeText);
         snoozeText.setText(String.valueOf(alarm.snoozeMinutes));
         soundCard.addView(snoozeText);
         soundCard.addView(fieldLabel("Auto-stop ringing after minutes"));
         autoStopText = new EditText(this);
         autoStopText.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        Ui.styleInput(this, autoStopText);
         autoStopText.setText(String.valueOf(alarm.autoStopMinutes));
         soundCard.addView(autoStopText);
         root.addView(soundCard);
@@ -232,7 +239,7 @@ public class EditAlarmActivity extends Activity {
     }
 
     private void save() {
-        City c = cities.get(citySpinner.getSelectedItemPosition());
+        City c = selectedCity == null ? cities.get(0) : selectedCity;
         alarm.cityName = c.name;
         alarm.zoneId = c.zoneId;
         alarm.label = label.getText().toString().trim().isEmpty() ? "Alarm" : label.getText().toString().trim();
@@ -282,8 +289,8 @@ public class EditAlarmActivity extends Activity {
     }
 
     private void updatePreview() {
-        if (preview == null || cities == null || citySpinner == null) return;
-        City c = cities.get(citySpinner.getSelectedItemPosition());
+        if (preview == null || cities == null || selectedCity == null) return;
+        City c = selectedCity;
         ZoneId z = TimeZones.resolveZone(c.zoneId);
         ZonedDateTime nowThere = ZonedDateTime.now(z);
         ZonedDateTime sample = LocalDateTime.of(nowThere.toLocalDate(), LocalTime.of(alarm.hour, alarm.minute)).atZone(z);
@@ -293,6 +300,97 @@ public class EditAlarmActivity extends Activity {
                 "\n\nYOUR ALARM  " + String.format("%02d:%02d", alarm.hour, alarm.minute) + " in " + c.name +
                 "\nDEVICE LOCAL  " + eat.format(DateTimeFormatter.ofPattern("HH:mm z")) + " on that target-city date";
         preview.setText(line);
+    }
+
+    private City findInitialCity() {
+        for (City c : cities) {
+            if (c.zoneId.equals(alarm.zoneId) && c.name.equals(alarm.cityName)) return c;
+        }
+        for (City c : cities) {
+            if (c.zoneId.equals(alarm.zoneId)) return c;
+        }
+        return cities.isEmpty() ? new City("Local device time", TimeZones.LOCAL_ZONE, "Home") : cities.get(0);
+    }
+
+    private String cityButtonText() {
+        if (selectedCity == null) return "Choose city / timezone";
+        return selectedCity.name + "\n" + (TimeZones.LOCAL_ZONE.equals(selectedCity.zoneId) ? "Device timezone" : selectedCity.zoneId);
+    }
+
+    private void showCityPicker() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(Ui.dp(this, 16), Ui.dp(this, 10), Ui.dp(this, 16), Ui.dp(this, 8));
+        box.setBackgroundColor(Ui.CARD);
+
+        TextView pickerTitle = Ui.text(this, "Choose target timezone", 20, Ui.INK, true);
+        pickerTitle.setPadding(0, 0, 0, Ui.dp(this, 8));
+        box.addView(pickerTitle);
+
+        EditText search = new EditText(this);
+        search.setHint("Search city or IANA timezone");
+        search.setSingleLine(true);
+        Ui.styleInput(this, search);
+        box.addView(search, new LinearLayout.LayoutParams(-1, Ui.dp(this, 52)));
+
+        ListView list = new ListView(this);
+        ArrayList<City> shown = new ArrayList<>(cities);
+        CityAdapter adapter = new CityAdapter(shown);
+        list.setAdapter(adapter);
+        list.setDividerHeight(1);
+        box.addView(list, new LinearLayout.LayoutParams(-1, Ui.dp(this, 430)));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setView(box)
+                .setNegativeButton("Cancel", null)
+                .create();
+
+        list.setOnItemClickListener((parent, view, position, id) -> {
+            selectedCity = adapter.getItem(position);
+            cityBtn.setText(cityButtonText());
+            updatePreview();
+            dialog.dismiss();
+        });
+
+        search.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence cs, int st, int c, int a) {}
+            public void onTextChanged(CharSequence cs, int st, int before, int count) {
+                String q = cs.toString().trim().toLowerCase(Locale.ROOT);
+                shown.clear();
+                for (City city : cities) {
+                    String hay = (city.name + " " + city.zoneId + " " + city.region).toLowerCase(Locale.ROOT);
+                    if (q.isEmpty() || hay.contains(q)) shown.add(city);
+                }
+                adapter.notifyDataSetChanged();
+            }
+            public void afterTextChanged(android.text.Editable e) {}
+        });
+
+        dialog.setOnShowListener(x -> {
+            dialog.getWindow().setBackgroundDrawable(Ui.rounded(Ui.CARD, 18, Ui.LINE, 1, this));
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(Ui.BRAND);
+        });
+        dialog.show();
+    }
+
+    private class CityAdapter extends ArrayAdapter<City> {
+        CityAdapter(List<City> values) {
+            super(EditAlarmActivity.this, android.R.layout.simple_list_item_2, android.R.id.text1, values);
+        }
+
+        @Override public View getView(int position, View convertView, android.view.ViewGroup parent) {
+            LinearLayout row = new LinearLayout(EditAlarmActivity.this);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(Ui.dp(EditAlarmActivity.this, 12), Ui.dp(EditAlarmActivity.this, 10), Ui.dp(EditAlarmActivity.this, 12), Ui.dp(EditAlarmActivity.this, 10));
+            row.setBackgroundColor(Ui.CARD);
+            City c = getItem(position);
+            TextView name = Ui.text(EditAlarmActivity.this, c == null ? "" : c.name, 15, Ui.INK, true);
+            row.addView(name);
+            TextView zone = Ui.text(EditAlarmActivity.this, c == null ? "" : c.zoneId + "  •  " + c.region, 11, Ui.MUTED, false);
+            zone.setPadding(0, Ui.dp(EditAlarmActivity.this, 2), 0, 0);
+            row.addView(zone);
+            return row;
+        }
     }
 
     private String toneButtonText() {
