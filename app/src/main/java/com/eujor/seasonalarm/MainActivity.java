@@ -2,32 +2,54 @@ package com.eujor.seasonalarm;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.NotificationManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Typeface;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.view.Gravity;
 import android.widget.Button;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Switch;
 import android.widget.TextView;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 public class MainActivity extends Activity {
     private static final int REQ_NOTIFICATIONS = 90;
-    private LinearLayout alarmsBox;
+    private static final int TAB_CLOCKS = 0;
+    private static final int TAB_ALARMS = 1;
+
+    private LinearLayout contentBox;
     private LinearLayout clocksBox;
-    private LinearLayout permissionsBox;
+    private LinearLayout alarmsBox;
+    private Button clocksTab;
+    private Button alarmsTab;
+    private TextView headerClock;
+    private int activeTab = TAB_CLOCKS;
+    private String activeRegion = "All";
+    private int clockTicks = 0;
+
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable clockTick = new Runnable() {
-        @Override public void run() { renderClocks(); handler.postDelayed(this, 1000); }
+        @Override public void run() {
+            updateHeaderClock();
+            clockTicks++;
+            if (activeTab == TAB_CLOCKS && clockTicks % 30 == 0) renderClocks();
+            handler.postDelayed(this, 1000);
+        }
     };
 
     @Override protected void onCreate(Bundle b) {
@@ -40,8 +62,7 @@ public class MainActivity extends Activity {
         super.onResume();
         AlarmScheduler scheduler = new AlarmScheduler(this);
         if (scheduler.canScheduleExact()) scheduler.rescheduleAll();
-        renderPermissions();
-        renderAlarms();
+        showTab(activeTab);
         handler.removeCallbacks(clockTick);
         handler.post(clockTick);
     }
@@ -53,112 +74,240 @@ public class MainActivity extends Activity {
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQ_NOTIFICATIONS) renderPermissions();
+        if (requestCode == REQ_NOTIFICATIONS && activeTab == TAB_ALARMS) showTab(TAB_ALARMS);
     }
 
     private void buildUi() {
         ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(24, 24, 24, 40);
+        root.setPadding(Ui.dp(this, 16), Ui.dp(this, 14), Ui.dp(this, 16), Ui.dp(this, 30));
+        root.setBackgroundColor(Ui.BG);
         scroll.addView(root);
 
-        TextView title = text("SEASON ALARM", 26, true);
-        root.addView(title);
-        root.addView(text("Home timezone: Nairobi, Africa (EAT)", 14, false));
+        LinearLayout hero = new LinearLayout(this);
+        hero.setOrientation(LinearLayout.VERTICAL);
+        hero.setPadding(Ui.dp(this, 20), Ui.dp(this, 18), Ui.dp(this, 20), Ui.dp(this, 18));
+        hero.setBackground(Ui.rounded(Ui.BRAND_DARK, 24, Ui.BRAND_DARK, 0, this));
+        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, -2);
+        hp.setMargins(0, 0, 0, Ui.dp(this, 14));
+        hero.setLayoutParams(hp);
 
-        root.addView(section("REQUIRED ACCESS"));
-        permissionsBox = new LinearLayout(this);
-        permissionsBox.setOrientation(LinearLayout.VERTICAL);
-        root.addView(permissionsBox);
+        TextView brand = Ui.text(this, "SeasonAlarm", 28, Color.WHITE, true);
+        hero.addView(brand);
+        TextView sub = Ui.text(this, "World-time alarms that follow each city's clock", 13, 0xffb9d5d1, false);
+        sub.setPadding(0, Ui.dp(this, 3), 0, Ui.dp(this, 14));
+        hero.addView(sub);
 
-        Button add = new Button(this);
-        add.setText("+ NEW ALARM");
-        add.setOnClickListener(v -> startActivity(new Intent(this, EditAlarmActivity.class)));
-        root.addView(add);
+        headerClock = Ui.text(this, "", 17, Color.WHITE, true);
+        hero.addView(headerClock);
+        TextView home = Ui.text(this, "HOME • Nairobi, Africa • EAT", 11, 0xff9fc7c1, true);
+        home.setLetterSpacing(0.08f);
+        home.setPadding(0, Ui.dp(this, 4), 0, 0);
+        hero.addView(home);
+        root.addView(hero);
 
-        root.addView(section("WORLD CLOCKS"));
-        clocksBox = new LinearLayout(this);
-        clocksBox.setOrientation(LinearLayout.VERTICAL);
-        root.addView(clocksBox);
+        LinearLayout tabs = new LinearLayout(this);
+        tabs.setOrientation(LinearLayout.HORIZONTAL);
+        tabs.setPadding(Ui.dp(this, 3), Ui.dp(this, 3), Ui.dp(this, 3), Ui.dp(this, 3));
+        tabs.setBackground(Ui.rounded(0xffe7eeee, 17, Ui.LINE, 1, this));
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-1, -2);
+        tp.setMargins(0, 0, 0, Ui.dp(this, 14));
+        tabs.setLayoutParams(tp);
 
-        root.addView(section("ALARMS"));
-        alarmsBox = new LinearLayout(this);
-        alarmsBox.setOrientation(LinearLayout.VERTICAL);
-        root.addView(alarmsBox);
+        clocksTab = Ui.tabButton(this, "World Clocks", true);
+        alarmsTab = Ui.tabButton(this, "My Alarms", false);
+        clocksTab.setOnClickListener(v -> showTab(TAB_CLOCKS));
+        alarmsTab.setOnClickListener(v -> showTab(TAB_ALARMS));
+        tabs.addView(clocksTab);
+        tabs.addView(alarmsTab);
+        root.addView(tabs);
+
+        contentBox = new LinearLayout(this);
+        contentBox.setOrientation(LinearLayout.VERTICAL);
+        root.addView(contentBox);
 
         setContentView(scroll);
-        renderPermissions();
+        updateHeaderClock();
+        showTab(TAB_CLOCKS);
     }
 
-    private void renderPermissions() {
-        if (permissionsBox == null) return;
-        permissionsBox.removeAllViews();
+    private void showTab(int tab) {
+        activeTab = tab;
+        Ui.styleTab(this, clocksTab, tab == TAB_CLOCKS);
+        Ui.styleTab(this, alarmsTab, tab == TAB_ALARMS);
+        contentBox.removeAllViews();
+        if (tab == TAB_CLOCKS) buildClocksTab(); else buildAlarmsTab();
+    }
 
-        if (Build.VERSION.SDK_INT >= 33) {
-            boolean notifications = checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
-            if (notifications) {
-                permissionsBox.addView(text("✓ Notifications allowed", 14, false));
-            } else {
-                Button b = new Button(this);
-                b.setText("ALLOW NOTIFICATIONS");
-                b.setOnClickListener(v -> requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFICATIONS));
-                permissionsBox.addView(b);
-            }
-        } else {
-            permissionsBox.addView(text("✓ Notifications available", 14, false));
-        }
+    private void buildClocksTab() {
+        LinearLayout intro = Ui.card(this);
+        TextView title = Ui.text(this, "Regional clocks", 20, Ui.INK, true);
+        intro.addView(title);
+        TextView copy = Ui.text(this,
+                "Choose an alarm in the city's local time. SeasonAlarm converts it to Nairobi automatically when DST or standard time changes.",
+                13, Ui.MUTED, false);
+        copy.setPadding(0, Ui.dp(this, 5), 0, 0);
+        intro.addView(copy);
+        contentBox.addView(intro);
 
-        AlarmScheduler scheduler = new AlarmScheduler(this);
-        if (scheduler.canScheduleExact()) {
-            permissionsBox.addView(text("✓ Exact alarms allowed", 14, false));
-        } else {
-            Button b = new Button(this);
-            b.setText("ALLOW EXACT ALARMS");
-            b.setOnClickListener(v -> {
-                Intent i = scheduler.exactAlarmSettingsIntent();
-                if (i != null) startActivity(i);
+        contentBox.addView(Ui.sectionTitle(this, "REGION"));
+        HorizontalScrollView hsv = new HorizontalScrollView(this);
+        hsv.setHorizontalScrollBarEnabled(false);
+        LinearLayout chips = new LinearLayout(this);
+        chips.setOrientation(LinearLayout.HORIZONTAL);
+        chips.setPadding(0, 0, Ui.dp(this, 6), Ui.dp(this, 8));
+        for (String region : TimeZones.regions()) {
+            Button chip = Ui.chip(this, region, region.equals(activeRegion));
+            chip.setOnClickListener(v -> {
+                activeRegion = region;
+                buildClocksTabRefresh();
             });
-            permissionsBox.addView(b);
+            chips.addView(chip);
         }
+        hsv.addView(chips);
+        contentBox.addView(hsv);
 
-        if (Build.VERSION.SDK_INT >= 34) {
-            NotificationManager nm = getSystemService(NotificationManager.class);
-            boolean fullScreen = nm != null && nm.canUseFullScreenIntent();
-            if (fullScreen) {
-                permissionsBox.addView(text("✓ Full-screen alarm access allowed", 14, false));
-            } else {
-                Button b = new Button(this);
-                b.setText("ALLOW FULL-SCREEN ALARMS");
-                b.setOnClickListener(v -> {
-                    Intent i = new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
-                            Uri.parse("package:" + getPackageName()));
-                    startActivity(i);
-                });
-                permissionsBox.addView(b);
-            }
-        } else {
-            permissionsBox.addView(text("✓ Full-screen alarm access available", 14, false));
-        }
+        clocksBox = new LinearLayout(this);
+        clocksBox.setOrientation(LinearLayout.VERTICAL);
+        contentBox.addView(clocksBox);
+        renderClocks();
+    }
 
-        permissionsBox.addView(text("✓ Vibration permission included (no runtime prompt required)", 14, false));
-        permissionsBox.addView(text("✓ Alarm tones use the Android system alarm-tone picker", 14, false));
+    private void buildClocksTabRefresh() {
+        showTab(TAB_CLOCKS);
     }
 
     private void renderClocks() {
         if (clocksBox == null) return;
         clocksBox.removeAllViews();
-        String[][] clocks = {
-                {"Nairobi", "Africa/Nairobi"}, {"London", "Europe/London"}, {"New York", "America/New_York"},
-                {"Dallas / Texas", "America/Chicago"}, {"Seattle", "America/Los_Angeles"},
-                {"Beijing", "Asia/Shanghai"}, {"Tokyo", "Asia/Tokyo"}, {"Singapore", "Asia/Singapore"},
-                {"Sydney", "Australia/Sydney"}
-        };
-        for (String[] c : clocks) {
-            TextView v = text(TimeZones.currentClockLine(c[0], c[1]), 15, false);
-            v.setPadding(0, 10, 0, 10);
-            clocksBox.addView(v);
+        List<City> cities = TimeZones.cities();
+        for (City city : cities) {
+            boolean homeMatch = "Home".equals(activeRegion) && (TimeZones.LOCAL_ZONE.equals(city.zoneId) || TimeZones.HOME_ZONE.equals(city.zoneId));
+            if (!"All".equals(activeRegion) && !homeMatch && !activeRegion.equals(city.region)) continue;
+            clocksBox.addView(clockCard(city));
         }
+    }
+
+    private View clockCard(City city) {
+        ZoneId zone = TimeZones.resolveZone(city.zoneId);
+        ZonedDateTime now = ZonedDateTime.now(zone);
+
+        LinearLayout card = Ui.card(this);
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+
+        LinearLayout names = new LinearLayout(this);
+        names.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(0, -2, 1f);
+        names.setLayoutParams(np);
+        TextView name = Ui.text(this, city.name, 17, Ui.INK, true);
+        names.addView(name);
+        TextView region = Ui.text(this, city.region + "  •  " + now.format(DateTimeFormatter.ofPattern("z")), 11, Ui.MUTED, true);
+        region.setPadding(0, Ui.dp(this, 2), 0, 0);
+        names.addView(region);
+        top.addView(names);
+
+        TextView season = Ui.badge(this,
+                zone.getRules().getTransitionRules().isEmpty() ? "FIXED" : (zone.getRules().isDaylightSavings(Instant.now()) ? "DST" : "STANDARD"),
+                Ui.BRAND, Ui.BRAND_SOFT);
+        top.addView(season);
+        card.addView(top);
+
+        TextView time = Ui.text(this, now.format(DateTimeFormatter.ofPattern("HH:mm")), 32, Ui.INK, true);
+        time.setPadding(0, Ui.dp(this, 12), 0, 0);
+        card.addView(time);
+        TextView date = Ui.text(this, now.format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy")), 13, Ui.MUTED, false);
+        card.addView(date);
+
+        LinearLayout bottom = new LinearLayout(this);
+        bottom.setOrientation(LinearLayout.HORIZONTAL);
+        bottom.setGravity(Gravity.CENTER_VERTICAL);
+        bottom.setPadding(0, Ui.dp(this, 12), 0, 0);
+        TextView offset = Ui.text(this, TimeZones.offsetFromHome(city.zoneId), 12, Ui.BRAND, true);
+        LinearLayout.LayoutParams op = new LinearLayout.LayoutParams(0, -2, 1f);
+        offset.setLayoutParams(op);
+        bottom.addView(offset);
+        TextView seasonText = Ui.text(this, TimeZones.seasonText(zone, now.toInstant()), 11, Ui.MUTED, false);
+        seasonText.setGravity(Gravity.END);
+        bottom.addView(seasonText);
+        card.addView(bottom);
+
+        card.setOnClickListener(v -> {
+            Intent i = new Intent(this, EditAlarmActivity.class);
+            i.putExtra("cityName", city.name);
+            i.putExtra("zoneId", city.zoneId);
+            startActivity(i);
+        });
+        return card;
+    }
+
+    private void buildAlarmsTab() {
+        contentBox.addView(readinessCard());
+
+        Button add = Ui.primaryButton(this, "+  Create alarm");
+        add.setOnClickListener(v -> startActivity(new Intent(this, EditAlarmActivity.class)));
+        contentBox.addView(add);
+
+        contentBox.addView(Ui.sectionTitle(this, "SCHEDULED ALARMS"));
+        alarmsBox = new LinearLayout(this);
+        alarmsBox.setOrientation(LinearLayout.VERTICAL);
+        contentBox.addView(alarmsBox);
+        renderAlarms();
+    }
+
+    private View readinessCard() {
+        LinearLayout card = Ui.card(this);
+        AlarmScheduler scheduler = new AlarmScheduler(this);
+        boolean notifications = Build.VERSION.SDK_INT < 33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+        boolean exact = scheduler.canScheduleExact();
+        boolean fullScreen = true;
+        if (Build.VERSION.SDK_INT >= 34) {
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            fullScreen = nm != null && nm.canUseFullScreenIntent();
+        }
+        boolean ready = notifications && exact && fullScreen;
+
+        LinearLayout heading = new LinearLayout(this);
+        heading.setOrientation(LinearLayout.HORIZONTAL);
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        TextView t = Ui.text(this, ready ? "Alarm system ready" : "Alarm access needs attention", 17, Ui.INK, true);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, -2, 1f);
+        t.setLayoutParams(tlp);
+        heading.addView(t);
+        heading.addView(Ui.badge(this, ready ? "READY" : "CHECK", ready ? Ui.SUCCESS : Ui.DANGER,
+                ready ? 0xffe5f5ec : 0xffffe9e9));
+        card.addView(heading);
+
+        TextView detail = Ui.text(this,
+                "Exact timing • notifications • full-screen alarm • tone • vibration",
+                12, Ui.MUTED, false);
+        detail.setPadding(0, Ui.dp(this, 5), 0, Ui.dp(this, 10));
+        card.addView(detail);
+
+        if (!notifications) {
+            Button b = Ui.secondaryButton(this, "Allow notifications");
+            b.setOnClickListener(v -> requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFICATIONS));
+            card.addView(b);
+        }
+        if (!exact) {
+            Button b = Ui.secondaryButton(this, "Allow exact alarms");
+            b.setOnClickListener(v -> {
+                Intent i = scheduler.exactAlarmSettingsIntent();
+                if (i != null) startActivity(i);
+            });
+            card.addView(b);
+        }
+        if (!fullScreen && Build.VERSION.SDK_INT >= 34) {
+            Button b = Ui.secondaryButton(this, "Allow full-screen alarms");
+            b.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                    Uri.parse("package:" + getPackageName()))));
+            card.addView(b);
+        }
+        return card;
     }
 
     private void renderAlarms() {
@@ -166,77 +315,116 @@ public class MainActivity extends Activity {
         alarmsBox.removeAllViews();
         List<Alarm> alarms = new AlarmRepository(this).all();
         if (alarms.isEmpty()) {
-            alarmsBox.addView(text("No alarms yet.", 15, false));
+            LinearLayout empty = Ui.card(this);
+            TextView icon = Ui.text(this, "⏰", 38, Ui.BRAND, false);
+            icon.setGravity(Gravity.CENTER_HORIZONTAL);
+            empty.addView(icon);
+            TextView title = Ui.text(this, "No alarms yet", 18, Ui.INK, true);
+            title.setGravity(Gravity.CENTER_HORIZONTAL);
+            empty.addView(title);
+            TextView sub = Ui.text(this, "Create one using a local city time or your device time.", 13, Ui.MUTED, false);
+            sub.setGravity(Gravity.CENTER_HORIZONTAL);
+            sub.setPadding(0, Ui.dp(this, 5), 0, 0);
+            empty.addView(sub);
+            alarmsBox.addView(empty);
             return;
         }
-        for (Alarm a : alarms) {
-            LinearLayout card = new LinearLayout(this);
-            card.setOrientation(LinearLayout.VERTICAL);
-            card.setPadding(16, 16, 16, 16);
-            card.setBackgroundColor(0xffeef3f2);
-            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
-            cp.setMargins(0, 0, 0, 16);
-            card.setLayoutParams(cp);
 
-            card.addView(text(a.label + "  •  " + String.format("%02d:%02d", a.hour, a.minute), 20, true));
-            card.addView(text(a.cityName + "\n" + repeatLabel(a) + "\n" + AlarmScheduler.nextSummary(a), 14, false));
+        for (Alarm a : alarms) alarmsBox.addView(alarmCard(a));
+    }
 
-            LinearLayout row = new LinearLayout(this);
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            Switch enabled = new Switch(this);
-            enabled.setText("Enabled");
-            enabled.setChecked(a.enabled);
-            enabled.setOnCheckedChangeListener((b, checked) -> {
-                a.enabled = checked;
-                new AlarmRepository(this).save(a);
-                AlarmScheduler s = new AlarmScheduler(this);
-                if (checked) s.scheduleNext(a); else s.cancel(a.id);
-                renderAlarms();
-            });
-            row.addView(enabled);
+    private View alarmCard(Alarm a) {
+        LinearLayout card = Ui.card(this);
 
-            Button edit = new Button(this); edit.setText("EDIT");
-            edit.setOnClickListener(v -> startActivity(new Intent(this, EditAlarmActivity.class).putExtra("id", a.id)));
-            row.addView(edit);
-            Button del = new Button(this); del.setText("DELETE");
-            del.setOnClickListener(v -> {
-                new AlarmScheduler(this).cancel(a.id);
-                new AlarmRepository(this).delete(a.id);
-                renderAlarms();
-            });
-            row.addView(del);
-            card.addView(row);
-            alarmsBox.addView(card);
-        }
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout titleBox = new LinearLayout(this);
+        titleBox.setOrientation(LinearLayout.VERTICAL);
+        titleBox.setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1f));
+        titleBox.addView(Ui.text(this, a.label, 18, Ui.INK, true));
+        TextView city = Ui.text(this, a.cityName, 12, Ui.MUTED, false);
+        city.setPadding(0, Ui.dp(this, 2), 0, 0);
+        titleBox.addView(city);
+        top.addView(titleBox);
+
+        Switch enabled = new Switch(this);
+        enabled.setChecked(a.enabled);
+        enabled.setContentDescription("Enable " + a.label);
+        enabled.setOnCheckedChangeListener((button, checked) -> {
+            a.enabled = checked;
+            new AlarmRepository(this).save(a);
+            AlarmScheduler s = new AlarmScheduler(this);
+            if (checked) s.scheduleNext(a); else s.cancel(a.id);
+            renderAlarms();
+        });
+        top.addView(enabled);
+        card.addView(top);
+
+        TextView time = Ui.text(this, String.format("%02d:%02d", a.hour, a.minute), 34, a.enabled ? Ui.INK : 0xff91a1a5, true);
+        time.setPadding(0, Ui.dp(this, 10), 0, 0);
+        card.addView(time);
+        TextView local = Ui.text(this, "Target city local time", 11, Ui.MUTED, true);
+        card.addView(local);
+
+        TextView next = Ui.text(this, "Next  •  " + AlarmScheduler.nextSummary(a), 12, Ui.BRAND, true);
+        next.setPadding(0, Ui.dp(this, 10), 0, Ui.dp(this, 10));
+        card.addView(next);
+        card.addView(Ui.divider(this));
+
+        String tone = AlarmRingingService.SILENT_TONE.equals(a.toneUri) ? "Silent" : (a.toneUri == null || a.toneUri.isEmpty() ? "Default tone" : "Custom tone");
+        TextView info = Ui.text(this, repeatLabel(a) + "   •   " + tone + "   •   " + (a.vibrate ? "Vibrate" : "No vibration") + "   •   Snooze " + a.snoozeMinutes + "m",
+                12, Ui.MUTED, false);
+        info.setPadding(0, Ui.dp(this, 10), 0, Ui.dp(this, 10));
+        card.addView(info);
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        Button edit = Ui.secondaryButton(this, "Edit");
+        edit.setLayoutParams(new LinearLayout.LayoutParams(0, Ui.dp(this, 46), 1f));
+        edit.setOnClickListener(v -> startActivity(new Intent(this, EditAlarmActivity.class).putExtra("id", a.id)));
+        actions.addView(edit);
+
+        View spacer = new View(this);
+        spacer.setLayoutParams(new LinearLayout.LayoutParams(Ui.dp(this, 8), 1));
+        actions.addView(spacer);
+
+        Button del = Ui.secondaryButton(this, "Delete");
+        del.setTextColor(Ui.DANGER);
+        del.setLayoutParams(new LinearLayout.LayoutParams(0, Ui.dp(this, 46), 1f));
+        del.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle("Delete alarm?")
+                .setMessage(a.label + " will be removed.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Delete", (d, which) -> {
+                    new AlarmScheduler(this).cancel(a.id);
+                    new AlarmRepository(this).delete(a.id);
+                    renderAlarms();
+                }).show());
+        actions.addView(del);
+        card.addView(actions);
+        return card;
     }
 
     private String repeatLabel(Alarm a) {
         return switch (a.repeatMode) {
             case "DAILY" -> "Every day";
-            case "WEEKDAYS" -> "Weekdays (Mon–Fri)";
-            case "SELECTED_DAYS" -> "Selected weekdays " + a.weekdays;
-            case "DATES" -> "Specific dates " + a.dates;
-            case "ONCE" -> "Once on " + a.onceDate;
+            case "WEEKDAYS" -> "Weekdays";
+            case "SELECTED_DAYS" -> "Selected weekdays";
+            case "DATES" -> "Calendar dates";
+            case "ONCE" -> "One time";
             default -> a.repeatMode;
         };
     }
 
-    private TextView text(String s, int sp, boolean bold) {
-        TextView v = new TextView(this);
-        v.setText(s); v.setTextSize(sp); v.setTextColor(0xff132226);
-        if (bold) v.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        return v;
-    }
-
-    private TextView section(String s) {
-        TextView v = text(s, 17, true);
-        v.setPadding(0, 28, 0, 8);
-        return v;
+    private void updateHeaderClock() {
+        if (headerClock == null) return;
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.of(TimeZones.HOME_ZONE));
+        headerClock.setText(now.format(DateTimeFormatter.ofPattern("HH:mm:ss  •  EEE, dd MMM")));
     }
 
     private void requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT >= 33 &&
-                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFICATIONS);
         }
     }
