@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing version tag to build and publish'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -13,8 +19,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Determine tag
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout selected version
         uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.version.outputs.tag }}
 
       - name: Java 17
         uses: actions/setup-java@v4
@@ -39,11 +56,13 @@ jobs:
       - name: Build APK
         run: gradle :app:assembleDebug --stacktrace
 
-      - name: Name APK from tag
-        run: cp app/build/outputs/apk/debug/app-debug.apk "SeasonAlarm-${GITHUB_REF_NAME}.apk"
+      - name: Name APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk "SeasonAlarm-${{ steps.version.outputs.tag }}.apk"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: SeasonAlarm ${{ steps.version.outputs.tag }}
           generate_release_notes: true
-          files: SeasonAlarm-${{ github.ref_name }}.apk
+          files: SeasonAlarm-${{ steps.version.outputs.tag }}.apk
